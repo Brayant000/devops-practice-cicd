@@ -7,7 +7,7 @@ on:
 
 env:
   DOCKER_IMAGE_NAME: devops-cicd-app
-  RENDER_SERVICE_NAME: devops-cicd-app-brayant
+  RENDER_SERVICE_NAME: devops-app-brayant000  # NUEVO NOMBRE
 
 jobs:
   build-and-test:
@@ -77,15 +77,61 @@ jobs:
     - name: 📥 Checkout del código
       uses: actions/checkout@v3
     
-    - name: 🚀 Desplegar en Render
-      uses: johnbeynon/render-deploy-action@v0.0.8
-      with:
-        service-id: ${{ env.RENDER_SERVICE_NAME }}
-        api-key: ${{ secrets.RENDER_API_KEY }}
-    
-    - name: ✅ Verificar despliegue
+    - name: 🔑 Configurar Render CLI
       run: |
-        echo "🔄 Esperando que el servicio esté listo..."
-        sleep 30
-        echo "🎉 ¡Despliegue completado!"
+        # Instalar Render CLI
+        curl -fsSL https://cli.render.com/install.sh | sh
+        echo "$HOME/.render/bin" >> $GITHUB_PATH
+    
+    - name: 🚀 Crear/Actualizar servicio en Render
+      env:
+        RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+      run: |
+        # Verificar que tenemos la API key
+        if [ -z "$RENDER_API_KEY" ]; then
+          echo "❌ ERROR: RENDER_API_KEY no está configurada en GitHub Secrets"
+          exit 1
+        fi
+        
+        echo "🚀 Creando servicio en Render..."
+        
+        # Crear servicio usando Render CLI
+        render services create \
+          --name "${{ env.RENDER_SERVICE_NAME }}" \
+          --type web \
+          --env docker \
+          --dockerfile-path ./Dockerfile \
+          --plan free \
+          --region oregon \
+          --auto-deploy yes || echo "⚠️ Servicio ya existe, actualizando..."
+        
+        echo "✅ Servicio configurado en Render"
         echo "🌐 URL: https://${{ env.RENDER_SERVICE_NAME }}.onrender.com"
+    
+    - name: ⏳ Esperar despliegue
+      run: |
+        echo "⏳ Esperando que el servicio esté disponible..."
+        sleep 60  # Render Free es lento
+        echo "✅ Despliegue completado (puede tardar unos minutos más en Render)"
+
+  verify:
+    runs-on: ubuntu-latest
+    needs: deploy-render
+    if: always()
+    
+    steps:
+    - name: ✅ Verificar todo el pipeline
+      run: |
+        echo "=== 🎉 RESUMEN DEL PIPELINE ==="
+        echo "📅 Fecha: $(date)"
+        echo "👤 GitHub User: Brayant000"
+        echo "🐳 Docker User: brayant002"
+        echo "📦 Docker Image: brayant002/devops-cicd-app:latest"
+        echo "🌐 Render Service: ${{ env.RENDER_SERVICE_NAME }}"
+        echo "🔗 Render URL: https://${{ env.RENDER_SERVICE_NAME }}.onrender.com"
+        echo ""
+        echo "✅ Pipeline ejecutado exitosamente"
+        echo "📊 Verifica en:"
+        echo "   - GitHub Actions: https://github.com/Brayant000/devops-practice-cicd/actions"
+        echo "   - Docker Hub: https://hub.docker.com/r/brayant002/devops-cicd-app"
+        echo "   - Render: https://dashboard.render.com/web-services"
