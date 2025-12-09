@@ -1,0 +1,91 @@
+name: CI/CD Pipeline Completa
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  DOCKER_IMAGE_NAME: devops-cicd-app
+  RENDER_SERVICE_NAME: devops-cicd-app
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📥 Checkout del código
+      uses: actions/checkout@v3
+    
+    - name: 🐍 Configurar Python 3.9
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: 📦 Instalar dependencias
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: 🧪 Probar aplicación
+      run: |
+        echo "🧪 Ejecutando pruebas..."
+        python -c "from app import app; print('✅ App importada correctamente')"
+        python -c "import flask; print(f'✅ Flask version: {flask.__version__}')"
+        echo "🎉 Todas las pruebas pasaron!"
+
+  docker-build-push:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: github.event_name == 'push'
+    
+    steps:
+    - name: 📥 Checkout del código
+      uses: actions/checkout@v3
+    
+    - name: 🐳 Configurar Docker Buildx
+      uses: docker/setup-buildx-action@v2
+    
+    - name: 🔑 Login a Docker Hub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+    
+    - name: 🏗️ Construir y etiquetar imagen
+      run: |
+        docker build -t ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:latest .
+        docker tag ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:latest \
+                  ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:${{ github.sha }}
+        echo "✅ Imagen construida y etiquetada"
+    
+    - name: 🚀 Subir a Docker Hub
+      run: |
+        echo "Subiendo imágenes a Docker Hub..."
+        docker push ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:latest
+        docker push ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:${{ github.sha }}
+        echo "🎉 Imágenes subidas exitosamente!"
+        echo "📦 latest: ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:latest"
+        echo "🏷️  SHA: ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:${{ github.sha }}"
+
+  deploy-render:
+    runs-on: ubuntu-latest
+    needs: docker-build-push
+    if: github.event_name == 'push'
+    
+    steps:
+    - name: 📥 Checkout del código
+      uses: actions/checkout@v3
+    
+    - name: 🚀 Desplegar en Render
+      uses: johnbeynon/render-deploy-action@v0.0.8
+      with:
+        service-id: ${{ env.RENDER_SERVICE_NAME }}
+        api-key: ${{ secrets.RENDER_API_KEY }}
+    
+    - name: ✅ Verificar despliegue
+      run: |
+        echo "🔄 Esperando que el servicio esté listo..."
+        sleep 30
+        echo "🎉 ¡Despliegue completado!"
+        echo "🌐 URL: https://${{ env.RENDER_SERVICE_NAME }}.onrender.com"
