@@ -7,7 +7,7 @@ on:
 
 env:
   DOCKER_IMAGE_NAME: devops-cicd-app
-  RENDER_SERVICE_NAME: devops-cicd-app
+  RENDER_SERVICE_NAME: devops-cicd-app-brayant
 
 jobs:
   build-and-test:
